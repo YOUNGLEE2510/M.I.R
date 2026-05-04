@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StringDB – Musical Instrument Recognition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body>
+
+  <!-- ══════════════════════════════════════
+     LAYOUT ROOT
+══════════════════════════════════════ -->
+  <div class="layout">
+
+    <!-- ── LEFT SIDEBAR ─────────────────── -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <svg class="logo-svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+        </svg>
+        <span>StringDB</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-tab="search" title="Tìm Kiếm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <span>Tìm Kiếm</span>
+        </button>
+        <button class="nav-item" data-tab="ingest" title="Thêm Dữ Liệu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          <span>Thêm Dữ Liệu</span>
+        </button>
+        <button class="nav-item" data-tab="database" title="Thư Viện">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18M3 12h18M3 18h18" />
+          </svg>
+          <span>Thư Viện</span>
+        </button>
+        <button class="nav-item" data-tab="evaluate" title="Đánh Giá">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3v18h18" />
+            <path d="m19 9-5 5-4-4-3 3" />
+          </svg>
+          <span>Đánh Giá</span>
+        </button>
+        <button class="nav-item" data-tab="system" title="Hệ Thống">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="5" rx="1"/>
+            <rect x="14" y="3" width="7" height="5" rx="1"/>
+            <rect x="8" y="16" width="8" height="5" rx="1"/>
+            <path d="M6.5 8v4h11V8"/>
+            <path d="M12 12v4"/>
+          </svg>
+          <span>Hệ Thống</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-status">
+        <div class="status-dot" id="dbDot"></div>
+        <span id="dbStatusText">Đang kết nối...</span>
+      </div>
+    </aside>
+
+    <!-- ── MAIN CONTENT ──────────────────── -->
+    <div class="main-wrap">
+
+      <!-- Top bar -->
+      <header class="topbar">
+        <div class="topbar-stats">
+          <div class="tstat"><span id="totalFiles">–</span><small>Files</small></div>
+          <div class="tstat"><span id="totalInstruments">–</span><small>Nhạc cụ</small></div>
+          <div class="tstat"><span id="faissVectors">–</span><small>FAISS vectors</small></div>
+        </div>
+      </header>
+
+      <main class="main-content">
+
+        <!-- ════════════════════════════════
+           TAB: SEARCH
+      ════════════════════════════════ -->
+        <section class="tab-panel active" id="tab-search">
+          <h1 class="page-title">Tìm kiếm nhạc cụ</h1>
+          <p class="page-sub">Upload một file âm thanh – hệ thống sẽ tìm 5 file giống nhất trong cơ sở dữ liệu</p>
+
+          <!-- Upload zone -->
+          <div class="upload-zone" id="searchDropzone">
+            <div class="uz-idle" id="uzIdle">
+              <div class="uz-icon">♪</div>
+              <p class="uz-title">Kéo thả file âm thanh vào đây</p>
+              <p class="uz-sub">WAV · MP3 · OGG · FLAC</p>
+              <label class="sp-btn sp-btn--green" for="searchFile">Chọn file</label>
+              <input type="file" id="searchFile" accept=".wav,.mp3,.ogg,.flac,.aif,.aiff" hidden />
+            </div>
+            <div class="uz-ready hidden" id="uzReady">
+              <div class="uz-file-info">
+                <div class="uz-file-icon">🎵</div>
+                <div>
+                  <p class="uz-fname" id="searchFileName">–</p>
+                  <audio id="searchAudio" controls class="sp-player-mini"></audio>
+                </div>
+              </div>
+              <div class="uz-actions">
+                <div class="k-control">
+                  <label>Kết quả: <strong id="kVal">5</strong></label>
+                  <input type="range" id="kSlider" min="1" max="10" value="5" />
+                </div>
+                <button class="sp-btn sp-btn--green" id="searchBtn">🔍 Tìm kiếm</button>
+                <button class="sp-btn sp-btn--ghost" id="clearSearchBtn">✕ Xóa</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty state -->
+          <div class="empty-state" id="searchEmpty">
+            <div class="es-grid">
+              <div class="es-card">
+                <div class="es-card-icon">🎻</div><span>Violin</span>
+              </div>
+              <div class="es-card">
+                <div class="es-card-icon">🎸</div><span>Guitar</span>
+              </div>
+              <div class="es-card">
+                <div class="es-card-icon">🎻</div><span>Cello</span>
+              </div>
+              <div class="es-card">
+                <div class="es-card-icon">🪕</div><span>Mandolin</span>
+              </div>
+              <div class="es-card">
+                <div class="es-card-icon">🎵</div><span>Harp</span>
+              </div>
+              <div class="es-card">
+                <div class="es-card-icon">🎻</div><span>Viola</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Intermediate Results Panel -->
+          <div id="intermediatePanel" class="hidden">
+            <div class="inter-header">
+              <h2>Kết quả trung gian</h2>
+              <span class="inter-sub">Đặc trưng âm thanh được trích xuất từ file query</span>
+            </div>
+            <div class="inter-grid">
+              <div class="inter-card">
+                <div class="inter-card-title">📊 MFCC Mean (40 hệ số)</div>
+                <canvas id="mfccChart" width="420" height="120"></canvas>
+              </div>
+              <div class="inter-card">
+                <div class="inter-card-title">📋 Đặc trưng phổ (Intermediate Features)</div>
+                <table class="feat-table" id="featTable"></table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Results -->
+          <div id="searchResults" class="hidden">
+            <!-- Query summary -->
+            <div class="query-bar" id="queryBar"></div>
+            <!-- Section title -->
+            <div class="results-header">
+              <h2>Kết quả tìm kiếm</h2>
+              <span class="result-badge" id="resultCount"></span>
+            </div>
+            <!-- Card grid -->
+            <div class="sp-grid" id="resultGrid"></div>
+          </div>
+        </section>
+
+        <!-- ════════════════════════════════
+           TAB: INGEST
+      ════════════════════════════════ -->
+        <section class="tab-panel" id="tab-ingest">
+          <h1 class="page-title">Thêm dữ liệu</h1>
+          <p class="page-sub">Upload file âm thanh nhạc cụ và gán nhãn để lưu vào MongoDB</p>
+
+          <div class="ingest-layout">
+            <div class="ingest-drop" id="ingestDropzone">
+              <div class="iz-idle" id="izIdle">
+                <div class="uz-icon">📂</div>
+                <p class="uz-title">Kéo file vào đây</p>
+                <label class="sp-btn sp-btn--green" for="ingestFile">Chọn file</label>
+                <input type="file" id="ingestFile" accept=".wav,.mp3,.ogg,.flac,.aif,.aiff" hidden multiple />
+              </div>
+              <p class="iz-selected hidden" id="ingestSelected"></p>
+            </div>
+
+            <div class="ingest-form">
+              <div class="sp-field">
+                <label>Tên nhạc cụ *</label>
+                <input type="text" id="instrumentName" placeholder="violin, guitar, cello..." />
+              </div>
+              <div class="sp-field">
+                <label>Họ nhạc cụ</label>
+                <select id="instrumentFamily">
+                  <option value="bowed_string">🎻 Dây kéo (Bowed String)</option>
+                  <option value="plucked_string">🎸 Dây gảy (Plucked String)</option>
+                  <option value="unknown">Khác</option>
+                </select>
+              </div>
+              <div class="ingest-btns">
+                <button class="sp-btn sp-btn--green" id="ingestBtn" disabled>⬆ Upload &amp; Lưu</button>
+                <button class="sp-btn sp-btn--ghost" id="rebuildBtn">⚡ Rebuild Index</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="ingestLog" class="sp-log hidden"></div>
+        </section>
+
+        <!-- ════════════════════════════════
+           TAB: DATABASE
+      ════════════════════════════════ -->
+        <section class="tab-panel" id="tab-database">
+          <div class="db-toprow">
+            <h1 class="page-title">Thư viện</h1>
+            <div class="db-controls">
+              <input class="sp-search-input" type="text" id="dbFilter" placeholder="Lọc theo nhạc cụ..." />
+              <button class="sp-btn sp-btn--ghost sp-btn--sm" id="refreshDbBtn">↻ Làm mới</button>
+            </div>
+          </div>
+
+          <!-- Instrument badges -->
+          <div class="inst-badges" id="instrumentBadges"></div>
+
+          <!-- Table -->
+          <div class="sp-table-wrap">
+            <table class="sp-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Tên file</th>
+                  <th>Nhạc cụ</th>
+                  <th>Họ</th>
+                  <th>Duration</th>
+                  <th>Spectral Centroid</th>
+                  <th>ZCR</th>
+                  <th>RMS</th>
+                  <th>Ngày thêm</th>
+                </tr>
+              </thead>
+              <tbody id="dbTableBody">
+                <tr>
+                  <td colspan="9" class="td-center">Đang tải...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ════════════════════════════════
+           TAB: EVALUATE
+      ════════════════════════════════ -->
+        <section class="tab-panel" id="tab-evaluate">
+          <h1 class="page-title">Đánh giá hệ thống</h1>
+          <p class="page-sub">Tự động đánh giá <strong>Precision</strong> trên mẫu ngẫu nhiên từ cơ sở dữ liệu</p>
+
+          <div class="eval-cards">
+            <div class="eval-info-card">
+              <h3>Precision</h3>
+              <p>Trong 5 kết quả trả về, bao nhiêu file cùng nhạc cụ với query?</p>
+            </div>
+            <div class="eval-info-card">
+              <h3>Phương pháp</h3>
+              <p>Lấy ngẫu nhiên tối đa 50 bản ghi, mỗi bản làm query, tính độ chính xác trung bình.</p>
+            </div>
+          </div>
+
+          <button class="sp-btn sp-btn--green" id="evalBtn">▶ Chạy đánh giá</button>
+
+          <div id="evalResults" class="hidden">
+            <div class="eval-overall">
+              <p class="eval-label">Overall Precision</p>
+              <p class="eval-score" id="evalScore">–</p>
+            </div>
+            <div class="sp-grid sp-grid--sm" id="evalBreakdown"></div>
+
+            <!-- Confusion Matrix -->
+            <div class="cf-section">
+              <h3 class="cf-title">Ma trận nhầm lẫn (Confusion Matrix – Top-1)</h3>
+              <p class="cf-sub">Hàng = Nhạc cụ thực tế · Cột = Nhạc cụ dự đoán (Top-1)</p>
+              <div class="cf-wrap" id="confusionMatrix"></div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ════════════════════════════════
+           TAB: SYSTEM
+      ════════════════════════════════ -->
+        <section class="tab-panel" id="tab-system">
+          <h1 class="page-title">Sơ đồ hệ thống</h1>
+          <p class="page-sub">Kiến trúc và quy trình hoạt động của hệ thống nhận diện nhạc cụ bộ dây</p>
+
+          <!-- Block Diagram -->
+          <div class="sys-diagram">
+            <svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" class="sys-svg">
+              <!-- Stage 1: Input -->
+              <rect x="10" y="120" width="130" height="70" rx="10" fill="#1a2744" stroke="#4fc3f7" stroke-width="2"/>
+              <text x="75" y="148" text-anchor="middle" fill="#4fc3f7" font-size="11" font-weight="bold">🎵 Audio Input</text>
+              <text x="75" y="164" text-anchor="middle" fill="#8899aa" font-size="9">WAV / MP3 / OGG</text>
+              <text x="75" y="178" text-anchor="middle" fill="#8899aa" font-size="9">FLAC / AIF</text>
+              <!-- Arrow 1→2 -->
+              <line x1="140" y1="155" x2="175" y2="155" stroke="#4fc3f7" stroke-width="2" marker-end="url(#arr)"/>
+
+              <!-- Stage 2: Preprocessing -->
+              <rect x="175" y="100" width="140" height="110" rx="10" fill="#1a2744" stroke="#81c784" stroke-width="2"/>
+              <text x="245" y="122" text-anchor="middle" fill="#81c784" font-size="11" font-weight="bold">⚙ Tiền xử lý</text>
+              <text x="245" y="138" text-anchor="middle" fill="#8899aa" font-size="8.5">• Resample → 22050 Hz</text>
+              <text x="245" y="152" text-anchor="middle" fill="#8899aa" font-size="8.5">• Mono + Trim silence</text>
+              <text x="245" y="166" text-anchor="middle" fill="#8899aa" font-size="8.5">• L2 Normalize</text>
+              <text x="245" y="180" text-anchor="middle" fill="#8899aa" font-size="8.5">• Peak normalize</text>
+              <!-- Arrow 2→3 -->
+              <line x1="315" y1="155" x2="350" y2="155" stroke="#81c784" stroke-width="2" marker-end="url(#arr2)"/>
+
+              <!-- Stage 3: Feature Extraction -->
+              <rect x="350" y="80" width="155" height="150" rx="10" fill="#1a2744" stroke="#ce93d8" stroke-width="2"/>
+              <text x="427" y="102" text-anchor="middle" fill="#ce93d8" font-size="11" font-weight="bold">📊 Trích xuất đặc trưng</text>
+              <text x="427" y="118" text-anchor="middle" fill="#8899aa" font-size="8">• MFCC mean (40d)</text>
+              <text x="427" y="130" text-anchor="middle" fill="#8899aa" font-size="8">• MFCC std (40d)</text>
+              <text x="427" y="142" text-anchor="middle" fill="#8899aa" font-size="8">• Chroma (12d)</text>
+              <text x="427" y="154" text-anchor="middle" fill="#8899aa" font-size="8">• Spectral Centroid (2d)</text>
+              <text x="427" y="166" text-anchor="middle" fill="#8899aa" font-size="8">• Rolloff, Flux, ZCR, RMS (4d)</text>
+              <text x="427" y="178" text-anchor="middle" fill="#8899aa" font-size="8">• HNR, Onset Strength (2d)</text>
+              <text x="427" y="195" text-anchor="middle" fill="#ce93d8" font-size="10" font-weight="bold">→ Vector 100 chiều</text>
+              <!-- Arrow 3→4 -->
+              <line x1="505" y1="155" x2="540" y2="155" stroke="#ce93d8" stroke-width="2" marker-end="url(#arr3)"/>
+
+              <!-- Stage 4: FAISS Search -->
+              <rect x="540" y="100" width="140" height="110" rx="10" fill="#1a2744" stroke="#ffb74d" stroke-width="2"/>
+              <text x="610" y="122" text-anchor="middle" fill="#ffb74d" font-size="11" font-weight="bold">🔍 FAISS Search</text>
+              <text x="610" y="138" text-anchor="middle" fill="#8899aa" font-size="8.5">• IndexFlatIP</text>
+              <text x="610" y="152" text-anchor="middle" fill="#8899aa" font-size="8.5">• Cosine similarity</text>
+              <text x="610" y="166" text-anchor="middle" fill="#8899aa" font-size="8.5">• Top-K nearest</text>
+              <text x="610" y="180" text-anchor="middle" fill="#8899aa" font-size="8.5">• Filter self-match</text>
+              <!-- Arrow 4→5 -->
+              <line x1="680" y1="155" x2="715" y2="155" stroke="#ffb74d" stroke-width="2" marker-end="url(#arr4)"/>
+
+              <!-- Stage 5: Results -->
+              <rect x="715" y="120" width="35" height="70" rx="8" fill="#1a2744" stroke="#ef5350" stroke-width="2"/>
+              <text x="732" y="148" text-anchor="middle" fill="#ef5350" font-size="9" font-weight="bold">Top</text>
+              <text x="732" y="163" text-anchor="middle" fill="#ef5350" font-size="9" font-weight="bold">5</text>
+              <text x="732" y="178" text-anchor="middle" fill="#8899aa" font-size="7">files</text>
+
+              <!-- MongoDB label below -->
+              <rect x="400" y="265" width="120" height="36" rx="8" fill="#182035" stroke="#4fc3f7" stroke-width="1.5" stroke-dasharray="5,3"/>
+              <text x="460" y="281" text-anchor="middle" fill="#4fc3f7" font-size="9">🗄 MongoDB Atlas</text>
+              <text x="460" y="294" text-anchor="middle" fill="#8899aa" font-size="8">Metadata + Vectors</text>
+              <line x1="460" y1="265" x2="460" y2="230" stroke="#4fc3f7" stroke-width="1.5" stroke-dasharray="4,3"/>
+              <line x1="460" y1="230" x2="610" y2="230" stroke="#4fc3f7" stroke-width="1.5" stroke-dasharray="4,3"/>
+              <line x1="610" y1="230" x2="610" y2="210" stroke="#4fc3f7" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr5)"/>
+
+              <!-- Arrowhead markers -->
+              <defs>
+                <marker id="arr"  markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4fc3f7"/></marker>
+                <marker id="arr2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#81c784"/></marker>
+                <marker id="arr3" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#ce93d8"/></marker>
+                <marker id="arr4" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#ffb74d"/></marker>
+                <marker id="arr5" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,6 2.5,0 5" fill="#4fc3f7"/></marker>
+              </defs>
+            </svg>
+          </div>
+
+          <!-- Feature explanation table -->
+          <div class="sys-feat-table">
+            <h2 class="sys-section-title">Bộ thuộc tính nhận diện (100 chiều)</h2>
+            <table class="sp-table">
+              <thead><tr><th>Đặc trưng</th><th>Chiều</th><th>Vai trò</th><th>Lý do chọn</th></tr></thead>
+              <tbody>
+                <tr><td><strong>MFCC Mean</strong></td><td>40d</td><td><span class="badge-sim">Tương đồng</span></td><td>Mô tả âm sắc/timbre — nhạc cụ khác nhau có MFC khác nhau rõ rệt</td></tr>
+                <tr><td><strong>MFCC Std</strong></td><td>40d</td><td><span class="badge-sim">Tương đồng</span></td><td>Biến thiên theo thời gian — phân biệt attack dài/ngắn, legato/staccato</td></tr>
+                <tr><td><strong>Chroma Mean</strong></td><td>12d</td><td><span class="badge-sim">Tương đồng</span></td><td>Nội dung hài âm — các nhạc cụ cùng họ có chroma tương tự</td></tr>
+                <tr><td><strong>Spectral Centroid</strong></td><td>2d</td><td><span class="badge-disc">Phân biệt</span></td><td>Độ sáng âm — violin sáng hơn cello; phân biệt độ cao của nhạc cụ</td></tr>
+                <tr><td><strong>Spectral Rolloff</strong></td><td>1d</td><td><span class="badge-disc">Phân biệt</span></td><td>Tần số giới hạn phổ — phân biệt nhạc cụ bright vs dark</td></tr>
+                <tr><td><strong>Spectral Flux</strong></td><td>1d</td><td><span class="badge-disc">Phân biệt</span></td><td>Tốc độ thay đổi phổ — phân biệt bowed (chậm) vs plucked (nhanh)</td></tr>
+                <tr><td><strong>ZCR</strong></td><td>1d</td><td><span class="badge-disc">Phân biệt</span></td><td>Tỉ lệ qua zero — âm có điều hòa thấp, noise cao</td></tr>
+                <tr><td><strong>RMS Energy</strong></td><td>1d</td><td><span class="badge-sim">Tương đồng</span></td><td>Cường độ âm — nhóm nhạc cụ cùng dynamic range</td></tr>
+                <tr><td><strong>HNR</strong></td><td>1d</td><td><span class="badge-disc">Phân biệt</span></td><td>Tỉ số hài âm/tạp âm — violin HNR cao, guitar HNR thấp hơn</td></tr>
+                <tr><td><strong>Onset Strength</strong></td><td>1d</td><td><span class="badge-disc">Phân biệt</span></td><td>Cường độ onset — phân biệt bowed (onset mềm) vs plucked (onset sắc)</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Process steps -->
+          <div class="sys-process">
+            <h2 class="sys-section-title">Quy trình tìm kiếm</h2>
+            <div class="process-steps">
+              <div class="pstep"><div class="pstep-num">1</div><div class="pstep-text"><strong>Upload file âm thanh</strong><br>Người dùng upload file query (WAV/MP3/...)</div></div>
+              <div class="pstep-arrow">→</div>
+              <div class="pstep"><div class="pstep-num">2</div><div class="pstep-text"><strong>Tiền xử lý</strong><br>Resample, mono, trim silence, normalize biên độ</div></div>
+              <div class="pstep-arrow">→</div>
+              <div class="pstep"><div class="pstep-num">3</div><div class="pstep-text"><strong>Trích xuất đặc trưng</strong><br>MFCC, Chroma, Spectral, ZCR, RMS, HNR, Onset → vector 100d</div></div>
+              <div class="pstep-arrow">→</div>
+              <div class="pstep"><div class="pstep-num">4</div><div class="pstep-text"><strong>L2 Normalize + FAISS</strong><br>Chuẩn hóa vector, tìm K=5 nearest neighbors (cosine similarity)</div></div>
+              <div class="pstep-arrow">→</div>
+              <div class="pstep"><div class="pstep-num">5</div><div class="pstep-text"><strong>Enrich từ MongoDB</strong><br>Lấy metadata (nhạc cụ, họ, duration...) cho từng kết quả</div></div>
+              <div class="pstep-arrow">→</div>
+              <div class="pstep"><div class="pstep-num">6</div><div class="pstep-text"><strong>Trả kết quả</strong><br>5 file giống nhất, sắp xếp giảm dần theo độ tương đồng</div></div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+    </div><!-- /main-wrap -->
+  </div><!-- /layout -->
+
+  <!-- ════════════════ TAB: SYSTEM ════════════════ -->
+  <!-- (inserted via JS as a section inside main-content) -->
+
+  <!-- Loading overlay -->
+  <div class="sp-overlay hidden" id="overlay">
+    <div class="sp-spinner-wrap">
+      <div class="sp-spinner"></div>
+      <p id="overlayText">Đang xử lý...</p>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+
+</html>

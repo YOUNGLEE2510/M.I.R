@@ -261,34 +261,62 @@
            TAB: EVALUATE
       ════════════════════════════════ -->
         <section class="tab-panel" id="tab-evaluate">
-          <h1 class="page-title">Đánh giá hệ thống</h1>
-          <p class="page-sub">Tự động đánh giá <strong>Precision</strong> trên mẫu ngẫu nhiên từ cơ sở dữ liệu</p>
+          <h1 class="page-title">Đánh giá & Phân tích kết quả</h1>
+          <p class="page-sub">Phân tích chi tiết độ tương đồng giữa file truy vấn và top 5 kết quả tìm kiếm</p>
 
-          <div class="eval-cards">
-            <div class="eval-info-card">
-              <h3>Precision</h3>
-              <p>Trong 5 kết quả trả về, bao nhiêu file cùng nhạc cụ với query?</p>
-            </div>
-            <div class="eval-info-card">
-              <h3>Phương pháp</h3>
-              <p>Lấy ngẫu nhiên tối đa 50 bản ghi, mỗi bản làm query, tính độ chính xác trung bình.</p>
+          <!-- Trạng thái rỗng: chưa tìm kiếm -->
+          <div id="eval-empty-state" class="empty-state-eval">
+            <div class="eval-empty-card">
+              <div class="eval-empty-icon">🔍</div>
+              <h3>Chưa có dữ liệu đánh giá</h3>
+              <p>Vui lòng thực hiện tìm kiếm bằng file âm thanh trước để xem phân tích chi tiết kết quả.</p>
+              <button class="sp-btn sp-btn--green" onclick="document.querySelector('[data-tab=search]').click()">Đi tới Tìm kiếm</button>
             </div>
           </div>
 
-          <button class="sp-btn sp-btn--green" id="evalBtn">▶ Chạy đánh giá</button>
-
-          <div id="evalResults" class="hidden">
-            <div class="eval-overall">
-              <p class="eval-label">Overall Precision</p>
-              <p class="eval-score" id="evalScore">–</p>
+          <!-- Trạng thái có kết quả -->
+          <div id="eval-content-state" class="hidden">
+            <!-- 1. Giải thích giải thuật -->
+            <div class="eval-theory-card">
+              <h3>📐 Thuật toán tính độ tương đồng (Cosine Similarity)</h3>
+              <p>Hệ thống trích xuất vector đặc trưng âm thanh 100 chiều, thực hiện chuẩn hóa Z-score và chuẩn hóa L2. Độ tương đồng giữa file truy vấn (Query) và một kết quả (Result) được tính bằng tích vô hướng (Inner Product):</p>
+              <div class="formula-block">
+                Similarity(Query, Result) = Query • Result = ∑ (Query_i × Result_i) &nbsp;[i = 1..100]
+              </div>
+              <p class="formula-desc">Do hai vector đã được chuẩn hóa L2 nên tích vô hướng này chính là Cosine Similarity. Giá trị nằm trong khoảng [-100%, 100%]. Giá trị càng cao thể hiện hai âm thanh càng giống nhau về mặt âm sắc, hài âm và động lực học.</p>
             </div>
-            <div class="sp-grid sp-grid--sm" id="evalBreakdown"></div>
 
-            <!-- Confusion Matrix -->
-            <div class="cf-section">
-              <h3 class="cf-title">Ma trận nhầm lẫn (Confusion Matrix – Top-1)</h3>
-              <p class="cf-sub">Hàng = Nhạc cụ thực tế · Cột = Nhạc cụ dự đoán (Top-1)</p>
-              <div class="cf-wrap" id="confusionMatrix"></div>
+            <!-- 2. Bảng so sánh đặc trưng -->
+            <div class="eval-section">
+              <h3 class="eval-section-title">📊 So sánh đặc trưng vật lý giữa Query và Kết quả</h3>
+              <div class="sp-table-wrap">
+                <table class="sp-table" id="evalCompareTable">
+                  <!-- Được sinh động từ JS -->
+                </table>
+              </div>
+            </div>
+
+            <!-- 3. Đóng góp đặc trưng vector -->
+            <div class="eval-section">
+              <div class="eval-flex-header">
+                <h3 class="eval-section-title">🔬 Phân tích đóng góp của các nhóm đặc trưng</h3>
+                <div class="eval-select-wrap">
+                  <label for="evalSelectResult">Chọn kết quả so sánh:</label>
+                  <select id="evalSelectResult" class="eval-select">
+                    <!-- Được sinh từ JS -->
+                  </select>
+                </div>
+              </div>
+              
+              <div class="eval-analysis-layout">
+                <!-- Biểu đồ đóng góp -->
+                <div class="eval-analysis-card">
+                  <h4>Tỷ lệ đóng góp vào tổng điểm Similarity</h4>
+                  <div id="evalContributionBars" class="contribution-bars-container">
+                    <!-- Được sinh từ JS -->
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>

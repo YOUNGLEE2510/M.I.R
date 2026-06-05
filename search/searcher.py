@@ -58,6 +58,7 @@ class AudioSearcher:
                 "onset_strength":    doc.get("onset_strength", 0),
                 "_id":               str(doc.get("_id", "")),
                 "file_path":         doc.get("file_path", ""),
+                "feature_vector":    doc.get("feature_vector", []),
             })
 
         # ── 4. Optional: detect unknown instrument ─────────

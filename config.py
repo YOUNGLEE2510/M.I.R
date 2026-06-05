@@ -4,10 +4,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── MongoDB Atlas ──
-MONGO_URI = os.getenv(
-    "MONGO_URI",
-    "mongodb+srv://ducanh2510:25102004@cluster0.ry2llwz.mongodb.net/?appName=Cluster0",
-)
+# Fix D1: URI chỉ đọc từ file .env, không hardcode trong source code
+MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    raise RuntimeError(
+        "MONGO_URI chưa được cấu hình! "
+        "Hãy tạo file .env với nội dung: MONGO_URI=mongodb+srv://..."
+    )
 MONGO_DB_NAME = "music_instrument_db"
 MONGO_COLLECTION = "audio_files"
 
@@ -30,9 +33,12 @@ FLASK_DEBUG = True
 MAX_UPLOAD_MB = 50   # Giới hạn upload file (MB)
 
 # ── Instrument families ──
-# Thứ tự: đặt tên dài trước tên ngắn để tránh substring match sai
+# Fix B3+B4: thêm "double bass" (tên folder có dấu cách) vào danh sách
+# batch_extract.py sẽ chuẩn hóa thành "double_bass" nhưng cần cover cả 2 variant
 INSTRUMENT_FAMILIES = {
-    "bowed_string":   ["violin", "viola", "cello", "contrabass", "double_bass", "erhu"],
+    "bowed_string":   ["violin", "viola", "cello", "contrabass", "double_bass",
+                        "double bass", "erhu"],
     "plucked_string": ["guitar", "bass_guitar", "ukulele", "mandolin", "harp",
-                       "banjo", "sitar", "dan_tranh", "dan_ty_ba", "dan_bau"],
+                        "banjo", "sitar", "dan_tranh", "dan_ty_ba", "dan_bau"],
 }
+

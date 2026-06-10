@@ -3,3 +3,25 @@ __pycache__/
 uploads/
 faiss_index/
 *.pyc
+
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# Audio data (large files)
+data/
+*.wav
+*.mp3
+*.ogg
+*.flac
+*.aif
+*.aiff
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

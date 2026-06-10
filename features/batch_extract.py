@@ -3,6 +3,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
+import numpy as np
 from tqdm import tqdm
 from features.extractor import AudioFeatureExtractor
 from database.mongo_client import get_db
@@ -76,15 +77,59 @@ def run(rebuild_index: bool = True):
             print(f"[FAISS] Đã index {total} vectors")
         return
 
-    print(f"[INFO] Sẽ xử lý {len(new_files)} files mới")
+    print(f"[INFO] Sẽ xử lý {len(new_files)} files mới\n")
 
     extractor = AudioFeatureExtractor()
-    ok, err = 0, 0
+    err = 0
 
-    for info in tqdm(new_files, desc="Extracting"):
+    # ══════════════════════════════════════════════════════════
+    # PASS 1 – Thu thập raw vectors (TRƯỚC khi scale)
+    # Mục đích: refit Z-score scaler từ dữ liệu THỰC (raw), không
+    # phải từ vectors đã scaled+normalized (lỗi logic cũ).
+    # Raw vectors chỉ ~1.8 MB cho 4500 files → giữ trong memory ổn.
+    # ══════════════════════════════════════════════════════════
+    print("[Pass 1/2] Đang trích xuất raw features...")
+    pass1_infos:    list[dict]       = []
+    pass1_raw_vecs: list[np.ndarray] = []
+    pass1_metas:    list[dict]       = []
+
+    for info in tqdm(new_files, desc="Pass 1 – raw extract"):
         try:
-            feats  = extractor.extract_all(info["file_path"])
-            record = {**info, **feats}
+            raw_vec, meta = extractor.extract_raw(info["file_path"])
+            pass1_infos.append(info)
+            pass1_raw_vecs.append(raw_vec)
+            pass1_metas.append(meta)
+        except Exception as e:
+            tqdm.write(f"  [SKIP] {info['filename']}: {e}")
+            err += 1
+
+    if not pass1_infos:
+        print("[ERROR] Không có file nào được xử lý thành công.")
+        return
+
+    # ── Refit scaler từ raw vectors thực ────────────────────
+    print(f"\n[Scaler] Fitting Z-score stats từ {len(pass1_raw_vecs)} raw vectors...")
+    AudioFeatureExtractor.refit_scaler(pass1_raw_vecs)
+    # Invalidate cache → scale_features() sẽ load stats mới từ file
+    AudioFeatureExtractor._scaler_mean = None
+    AudioFeatureExtractor._scaler_std  = None
+
+    # ══════════════════════════════════════════════════════════
+    # PASS 2 – Áp dụng scaler đúng rồi lưu vào MongoDB
+    # Không cần đọc lại file âm thanh — raw_vec đã có trong memory.
+    # ══════════════════════════════════════════════════════════
+    print("\n[Pass 2/2] Đang scale và lưu vào DB...")
+    ok = 0
+    for info, raw_vec, meta in tqdm(
+        zip(pass1_infos, pass1_raw_vecs, pass1_metas),
+        total=len(pass1_infos),
+        desc="Pass 2 – store",
+    ):
+        try:
+            vec = extractor.scale_features(raw_vec)
+            vec = extractor.apply_weights(vec)
+            vec = extractor.l2_normalize(vec)
+            record = {**info, **meta, "feature_vector": vec.tolist()}
             db.insert_one(record)
             ok += 1
         except Exception as e:

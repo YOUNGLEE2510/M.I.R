@@ -8,7 +8,7 @@ import mimetypes
 from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 
-from config import FLASK_DEBUG, FLASK_PORT, DATASET_PATH, FAISS_INDEX_PATH, UPLOAD_FOLDER, MAX_UPLOAD_MB
+from config import FLASK_DEBUG, FLASK_PORT, DATASET_PATH, FAISS_INDEX_PATH, UPLOAD_FOLDER, MAX_UPLOAD_MB, BASE_DIR
 from database.mongo_client import get_db
 from features.extractor import AudioFeatureExtractor
 from search.faiss_index import get_faiss, FaissIndex
@@ -43,6 +43,30 @@ def ok_ext(filename: str) -> bool:
 def tmp_path(filename: str) -> str:
     ext = Path(filename).suffix
     return os.path.join(UPLOAD_FOLDER, f"q_{uuid.uuid4().hex}{ext}")
+
+
+# ── Fix B1: Auto-resolve file_path ────────────────────────────────────────────
+def resolve_audio_path(doc: dict) -> str | None:
+    """Resolve file_path: nếu path cũ không tồn tại, tìm file trong DATASET_PATH."""
+    fp = doc.get("file_path", "")
+    if fp and os.path.exists(fp):
+        return fp
+
+    # Thử reconstruct từ DATASET_PATH + instrument + filename
+    instrument = doc.get("instrument", "")
+    filename = doc.get("filename", "")
+    if instrument and filename:
+        candidate = os.path.join(DATASET_PATH, instrument, filename)
+        if os.path.exists(candidate):
+            return candidate
+
+    # Thử tìm theo filename bất kỳ trong DATASET_PATH
+    if filename:
+        for dirpath, _, files in os.walk(DATASET_PATH):
+            if filename in files:
+                return os.path.join(dirpath, filename)
+
+    return None
 
 
 # ── Lazy searcher ─────────────────────────────────────────────────────────────
@@ -91,13 +115,15 @@ def list_records():
     page = max(1, int(request.args.get("page", 1)))
     per_page = min(100, max(10, int(request.args.get("per_page", 50))))
 
-    recs = db.search_by_instrument(inst) if inst else db.get_all()
-    total = len(recs)
-
-    # Fix #16: pagination
     start = (page - 1) * per_page
-    end = start + per_page
-    paginated = recs[start:end]
+
+    # Tối ưu hóa: Phân trang trực tiếp từ MongoDB (database-side pagination)
+    if inst:
+        total = db.col.count_documents({"instrument": {"$regex": inst, "$options": "i"}})
+        paginated = db.search_by_instrument(inst, skip=start, limit=per_page)
+    else:
+        total = db.col.count_documents({})
+        paginated = db.get_all(skip=start, limit=per_page)
 
     return jsonify({
         "total": total,
@@ -124,9 +150,22 @@ def get_record(record_id):
 
 @app.route("/api/records/<record_id>", methods=["DELETE"])
 def delete_record(record_id):
-    ok = get_db().delete_by_id(record_id)
-    if not ok:
+    db = get_db()
+    doc = db.get_by_id(record_id)
+    if not doc:
         return jsonify({"error": "Not found", "deleted": False}), 404
+
+    # Delete physical file on disk if exists
+    fp = resolve_audio_path(doc)
+    if fp and os.path.exists(fp):
+        try:
+            os.remove(fp)
+        except Exception as e:
+            print(f"[API] Lỗi xóa file vật lý {fp}: {e}")
+
+    ok = db.delete_by_id(record_id)
+    if not ok:
+        return jsonify({"error": "Không thể xóa bản ghi khỏi CSDL", "deleted": False}), 500
 
     # Fix #4: rebuild FAISS index after deletion to keep in sync
     try:
@@ -174,6 +213,10 @@ def ingest():
         return jsonify({"error": f"Định dạng không hợp lệ. Hỗ trợ: {ALLOWED}"}), 400
 
     instrument = request.form.get("instrument", "unknown").strip().lower()
+    instrument = "".join(c for c in instrument if c.isalnum() or c in " _-").strip()
+    instrument = instrument.replace(" ", "_").replace("-", "_")
+    if not instrument:
+        instrument = "unknown"
     family     = request.form.get("instrument_family", "unknown").strip()
 
     # Save to dataset folder
@@ -244,77 +287,59 @@ def stream_audio(record_id):
     doc = get_db().get_by_id(record_id)
     if not doc:
         return jsonify({"error": "Not found"}), 404
-    fp = doc.get("file_path", "")
-    if not fp or not os.path.exists(fp):
+
+    # Fix B1: auto-resolve path
+    fp = resolve_audio_path(doc)
+    if not fp:
         return jsonify({"error": "File không tồn tại trên đĩa"}), 404
+
     mime, _ = mimetypes.guess_type(fp)
     mime = mime or "audio/wav"
     return send_file(fp, mimetype=mime,
                      download_name=doc.get("filename", "audio.wav"))
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# API – Evaluate (Precision)
-# ══════════════════════════════════════════════════════════════════════════════
-@app.route("/api/evaluate", methods=["POST"])
-def evaluate():
-    import random
-    import numpy as np
+# ── Fix B1: Batch update file_path ────────────────────────────────────────────
+@app.route("/api/fix-paths", methods=["POST"])
+def fix_paths():
+    """Batch update tất cả file_path trong MongoDB cho đúng máy hiện tại."""
+    from bson import ObjectId
+    from pymongo import UpdateOne
 
-    # Fix #7: Seed cố định cho kết quả tái lập được
-    seed = int(request.form.get("seed", 42))
-    random.seed(seed)
+    db = get_db()
+    all_recs = db.get_all(include_vectors=False)
+    fixed, skipped, missing = 0, 0, 0
+    operations = []
 
-    db  = get_db()
-    fi  = FaissIndex()
-    if not fi.load():
-        return jsonify({"error": "FAISS index chưa tồn tại. Hãy build index trước."}), 503
-
-    all_recs = db.get_all_with_vectors()
-    if len(all_recs) < 10:
-        return jsonify({"error": "Cần ít nhất 10 bản ghi để đánh giá."}), 400
-
-    sample      = random.sample(all_recs, min(50, len(all_recs)))
-    by_inst: dict[str, list] = {}
-    scores: list[float]      = []
-    # confusion_matrix[actual][predicted] = count
-    confusion: dict[str, dict[str, int]] = {}
-
-    for rec in sample:
-        q_vec = np.array(rec["feature_vector"], dtype=np.float32)
-        q_id  = str(rec["_id"])
-        q_ins = rec.get("instrument", "unknown")
-
-        hits = fi.search(q_vec, k=6)
-        hits = [h for h in hits if h["mongo_id"] != q_id][:5]
-        if not hits:
+    for rec in all_recs:
+        old_fp = rec.get("file_path", "")
+        if old_fp and os.path.exists(old_fp):
+            skipped += 1
             continue
 
-        fetched = [db.get_by_id(h["mongo_id"]) for h in hits]
-        db_recs = {r["_id"]: r for r in fetched if r is not None}
-        correct = sum(1 for h in hits
-                      if db_recs.get(h["mongo_id"], {}).get("instrument") == q_ins)
-        p = correct / len(hits)
-        scores.append(p)
-        by_inst.setdefault(q_ins, []).append(p)
+        resolved = resolve_audio_path(rec)
+        if resolved:
+            new_fp = resolved.replace("\\", "/")
+            operations.append(
+                UpdateOne(
+                    {"_id": ObjectId(rec["_id"])},
+                    {"$set": {"file_path": new_fp}}
+                )
+            )
+            fixed += 1
+        else:
+            missing += 1
 
-        # Top-1 predicted instrument for confusion matrix
-        top1_doc = db_recs.get(hits[0]["mongo_id"], {}) if hits else {}
-        pred_ins = top1_doc.get("instrument", "unknown")
-        confusion.setdefault(q_ins, {})
-        confusion[q_ins][pred_ins] = confusion[q_ins].get(pred_ins, 0) + 1
+    # Bulk write tất cả cùng lúc (nhanh hơn nhiều so với update_one từng cái)
+    if operations:
+        db.col.bulk_write(operations, ordered=False)
 
-    overall = round(sum(scores) / len(scores) * 100, 2) if scores else 0
-    per_inst = {
-        inst: round(sum(v) / len(v) * 100, 2)
-        for inst, v in by_inst.items()
-    }
     return jsonify({
-        "seed":                    seed,
-        "sample_size":             len(scores),
-        "overall_precision_at_5":  overall,
-        "per_instrument":          per_inst,
-        "confusion_matrix":        confusion,
+        "status": "OK",
+        "fixed": fixed,
+        "skipped": skipped,
+        "missing": missing,
+        "total": len(all_recs),
     })
 
 
@@ -322,14 +347,23 @@ def evaluate():
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
-    db   = get_db()
-    ping = db.ping()
-    st   = db.stats()
+    db          = get_db()
+    ping_result = db.ping()
+    st          = db.stats()
     print("\n" + "═" * 55)
     print("  🎻 Musical Instrument Recognition System")
     print("═" * 55)
-    print(f"  MongoDB : {ping['message']}")
+    print(f"  MongoDB : {ping_result['message']}")
     print(f"  Records : {st['total_files']} files in DB")
+
+    # Fix B2: Auto-load FAISS index on startup
+    fi = get_faiss()
+    if os.path.exists(FAISS_INDEX_PATH):
+        fi.load()
+        print(f"  FAISS   : {fi.total} vectors loaded ✓")
+    else:
+        print(f"  FAISS   : Index chưa tồn tại (chạy batch_extract.py hoặc /api/index/build)")
+
     print(f"  URL     : http://localhost:{FLASK_PORT}")
     print("═" * 55 + "\n")
     app.run(debug=FLASK_DEBUG, port=FLASK_PORT, host="0.0.0.0")

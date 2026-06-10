@@ -49,9 +49,10 @@ class MusicDB:
             result = self.col.insert_one(record)
             return str(result.inserted_id)
         except pymongo.errors.DuplicateKeyError:
+            upd = {k: v for k, v in record.items() if k != "_id"}
             self.col.update_one(
                 {"filename": record["filename"]},
-                {"$set": record}
+                {"$set": upd}
             )
             doc = self.col.find_one({"filename": record["filename"]}, {"_id": 1})
             return str(doc["_id"]) if doc else ""
@@ -69,9 +70,14 @@ class MusicDB:
             return [str(v) for v in inserted.values()]
 
     # ── Read ──────────────────────────────────────────────────────────────────
-    def get_all(self, include_vectors: bool = False) -> list:
+    def get_all(self, include_vectors: bool = False, skip: int = 0, limit: int = 0) -> list:
         proj = {} if include_vectors else {"feature_vector": 0}
-        docs = list(self.col.find({}, proj))
+        cursor = self.col.find({}, proj)
+        if skip > 0:
+            cursor = cursor.skip(skip)
+        if limit > 0:
+            cursor = cursor.limit(limit)
+        docs = list(cursor)
         for d in docs:
             d["_id"] = str(d["_id"])
         return docs
@@ -96,20 +102,26 @@ class MusicDB:
             doc["_id"] = str(doc["_id"])
         return doc
 
-    def get_by_faiss_ids(self, faiss_ids: list) -> list:
+    def get_by_faiss_ids(self, faiss_ids: list, include_vectors: bool = False) -> list:
+        proj = {} if include_vectors else {"feature_vector": 0}
         docs = list(self.col.find(
             {"faiss_index": {"$in": faiss_ids}},
-            {"feature_vector": 0}
+            proj
         ))
         for d in docs:
             d["_id"] = str(d["_id"])
         return docs
 
-    def search_by_instrument(self, name: str) -> list:
-        docs = list(self.col.find(
+    def search_by_instrument(self, name: str, skip: int = 0, limit: int = 0) -> list:
+        cursor = self.col.find(
             {"instrument": {"$regex": name, "$options": "i"}},
             {"feature_vector": 0}
-        ))
+        )
+        if skip > 0:
+            cursor = cursor.skip(skip)
+        if limit > 0:
+            cursor = cursor.limit(limit)
+        docs = list(cursor)
         for d in docs:
             d["_id"] = str(d["_id"])
         return docs
@@ -130,6 +142,20 @@ class MusicDB:
             {"_id": ObjectId(record_id)},
             {"$set": {"faiss_index": idx}}
         )
+
+    def reset_all_faiss_indices(self):
+        self.col.update_many({}, {"$set": {"faiss_index": -1}})
+
+    def bulk_set_faiss_indices(self, id_idx_pairs: list[tuple[str, int]]):
+        """Batch-update faiss_index for many records in one bulk_write call."""
+        from pymongo import UpdateOne
+        if not id_idx_pairs:
+            return
+        ops = [
+            UpdateOne({"_id": ObjectId(rid)}, {"$set": {"faiss_index": idx}})
+            for rid, idx in id_idx_pairs
+        ]
+        self.col.bulk_write(ops, ordered=False)
 
     # ── Delete ────────────────────────────────────────────────────────────────
     def delete_all(self) -> int:

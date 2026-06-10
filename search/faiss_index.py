@@ -8,8 +8,9 @@ from database.mongo_client import get_db
 
 _ID_MAP_PATH = FAISS_INDEX_PATH + ".ids"
 
-# 🔥 BONUS: threshold lọc kết quả yếu
-SIMILARITY_THRESHOLD = 0.3   # 0.0 → 1.0 (tune tùy bạn)
+# Threshold tham khảo – không dùng trong search() để tránh trả về list rỗng
+# Caller (searcher.py) tự quyết định có lọc hay không
+SIMILARITY_THRESHOLD = 0.3
 
 
 class FaissIndex:
@@ -28,6 +29,9 @@ class FaissIndex:
         if not records:
             print("[FAISS] No records in MongoDB.")
             return 0
+
+        # Reset all faiss indices in DB to keep in sync
+        db.reset_all_faiss_indices()
 
         vecs, self.id_map = [], []
 
@@ -48,9 +52,10 @@ class FaissIndex:
         self.index = faiss.IndexFlatIP(dim)
         self.index.add(mat)
 
-        # Sync index → MongoDB
-        for i, mid in enumerate(self.id_map):
-            db.set_faiss_index(mid, i)
+        # Sync index → MongoDB (bulk – single round-trip)
+        db.bulk_set_faiss_indices([
+            (mid, i) for i, mid in enumerate(self.id_map)
+        ])
 
         if save:
             self._save()
@@ -114,19 +119,15 @@ class FaissIndex:
             if idx < 0 or idx >= len(self.id_map):
                 continue
 
-            sim = max(0.0, float(dist))  # cosine similarity
-
-            # 🔥 BONUS: filter kết quả yếu
-            if sim < SIMILARITY_THRESHOLD:
-                continue
+            sim = max(0.0, float(dist))  # cosine similarity (0.0 → 1.0)
 
             results.append({
-                "mongo_id":   self.id_map[idx],
+                "mongo_id":    self.id_map[idx],
                 "faiss_index": int(idx),
                 "similarity":  round(sim * 100, 2),
             })
 
-        # ✔ sort giảm dần
+        # sort giảm dần (FAISS IndexFlatIP đã sort, nhưng để chắc)
         results.sort(key=lambda x: x["similarity"], reverse=True)
 
         return results

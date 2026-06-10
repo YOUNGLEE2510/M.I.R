@@ -28,12 +28,16 @@ class AudioSearcher:
         # ── 2. FAISS search ────────────────────────────────
         raw = self.faiss.search(q_vec, k=k)
 
-        # ── 3. Enrich với MongoDB ─────────────────────────
+        # ── 3. Enrich với MongoDB (batch – fix N+1) ────────
+        faiss_ids = [hit["faiss_index"] for hit in raw]
+        batch_docs = self.db.get_by_faiss_ids(faiss_ids, include_vectors=True)
+        docs_by_fidx = {doc["faiss_index"]: doc for doc in batch_docs if doc}
+
         results = []
         inst_scores = defaultdict(float)
         note_votes = defaultdict(int)
         for rank, hit in enumerate(raw, 1):
-            doc = self.db.get_by_id(hit["mongo_id"])
+            doc = docs_by_fidx.get(hit["faiss_index"])
             if doc is None:
                 continue
 
@@ -58,6 +62,7 @@ class AudioSearcher:
                 "onset_strength":    doc.get("onset_strength", 0),
                 "_id":               str(doc.get("_id", "")),
                 "file_path":         doc.get("file_path", ""),
+                "feature_vector":    doc.get("feature_vector", []),
             })
 
         # ── 4. Optional: detect unknown instrument ─────────

@@ -31,16 +31,11 @@ function instIcon(instrument = '') {
     if (['cello', 'bass', 'contrabass'].some(x => name.includes(x))) return '🎻';
     if (['guitar'].some(x => name.includes(x))) return '🎸';
     if (['ukulele', 'mandolin', 'banjo'].some(x => name.includes(x))) return '🪕';
-    if (['harp'].some(x => name.includes(x))) return '🎵';
     if (['sitar', 'dan_tranh', 'dan_ty_ba', 'dan_bau'].some(x => name.includes(x))) return '🎶';
     return '♪';
 }
 
-function scoreColorClass(pct) {
-    if (pct >= 70) return 'score-high';
-    if (pct >= 40) return 'score-mid';
-    return 'score-low';
-}
+
 
 // ════════════════════════════════════════
 //  INIT
@@ -84,6 +79,7 @@ document.querySelectorAll('.nav-item').forEach(btn => {
         btn.classList.add('active');
         $(`tab-${btn.dataset.tab}`).classList.add('active');
         if (btn.dataset.tab === 'database') loadDatabase();
+        if (btn.dataset.tab === 'evaluate') renderEvaluation();
     });
 });
 
@@ -134,22 +130,19 @@ $('clearSearchBtn').addEventListener('click', () => {
     $('searchFile').value = '';
 });
 
-$('kSlider').addEventListener('input', () => {
-    $('kVal').textContent = $('kSlider').value;
-});
-
 $('searchBtn').addEventListener('click', async () => {
     if (!searchFile) return;
     showOverlay('🔍 Đang phân tích âm thanh...');
 
     const form = new FormData();
     form.append('file', searchFile);
-    form.append('k', $('kSlider').value);
+    form.append('k', 5);
 
     try {
         const data = await fetch(`${API}/api/search`, { method: 'POST', body: form }).then(r => r.json());
         hideOverlay();
         if (data.error) { alert(`❌ ${data.error}\n${data.hint || ''}`); return; }
+        lastSearchResult = data;
         renderResults(data);
     } catch (e) {
         hideOverlay();
@@ -212,6 +205,7 @@ function renderResults(data) {
       <div class="rc-inst">${r.instrument} · ${famLabel}</div>
       <div class="rc-meta">🎼 ${r.labeled_note || 'unknown'}</div>
       <div class="rc-meta">⏱ ${fmt(r.duration)}s &nbsp;|&nbsp; 🔆 ${fmt(r.spectral_centroid, 0)} Hz</div>
+      <button class="rc-detail-btn" title="Xem chi tiết" style="width: 100%; margin-top: 10px; padding: 6px 0; background: transparent; border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm); color: var(--muted); font-family: var(--font); font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: var(--trans); letter-spacing: 0.3px;">📄 Chi tiết</button>
       ${r._id ? `<audio class="rc-audio" src="${API}/api/audio/${r._id}"></audio>` : ''}
     `;
         // Wire up the play button to the hidden audio element
@@ -231,6 +225,10 @@ function renderResults(data) {
             });
             audioEl.addEventListener('ended', () => { playBtn.textContent = '▶'; });
         }
+        // Detail button → open drawer
+        card.querySelector('.rc-detail-btn').addEventListener('click', () => {
+            openDetailDrawer(r._id, { similarity: r.similarity, family: fam });
+        });
         grid.appendChild(card);
     });
 }
@@ -257,6 +255,7 @@ $('ingestBtn').addEventListener('click', async () => {
     if (!ingestFiles.length) return;
 
     showOverlay(`Đang xử lý ${ingestFiles.length} file...`);
+    let successCount = 0;
     for (const f of ingestFiles) {
         const form = new FormData();
         form.append('file', f);
@@ -264,12 +263,29 @@ $('ingestBtn').addEventListener('click', async () => {
         form.append('instrument_family', family);
         try {
             const d = await fetch(`${API}/api/ingest`, { method: 'POST', body: form }).then(r => r.json());
-            if (d.status === 'OK') log(`✓ ${f.name} → ${d.instrument} (${d.duration}s)`, 'ok');
+            if (d.status === 'OK') {
+                log(`✓ ${f.name} → ${d.instrument} (${d.duration}s)`, 'ok');
+                successCount++;
+            }
             else log(`✗ ${f.name}: ${d.error}`, 'err');
         } catch (e) { log(`✗ ${f.name}: ${e.message}`, 'err'); }
     }
+    
+    if (successCount > 0) {
+        log('⚡ Đang tự động xây dựng lại chỉ mục FAISS...', 'info');
+        try {
+            const d = await fetch(`${API}/api/index/build`, { method: 'POST' }).then(r => r.json());
+            if (d.status === 'OK') {
+                log(`✓ Đã cập nhật chỉ mục: ${d.indexed_vectors} vectors`, 'ok');
+            } else {
+                log(`✗ Lỗi rebuild: ${d.error}`, 'err');
+            }
+        } catch (e) {
+            log(`✗ Lỗi rebuild: ${e.message}`, 'err');
+        }
+    }
+    
     hideOverlay();
-    log('💡 Nhớ nhấn "Rebuild Index" để cập nhật FAISS!', 'info');
     loadStats();
 });
 
@@ -294,7 +310,7 @@ let dbPerPage = 50;
 let dbFilterInst = '';
 
 async function loadDatabase(page = 1) {
-    $('dbTableBody').innerHTML = '<tr><td colspan="9" class="td-center">⏳ Đang tải...</td></tr>';
+    $('dbTableBody').innerHTML = '<tr><td colspan="10" class="td-center">⏳ Đang tải...</td></tr>';
     try {
         let url = `${API}/api/records?page=${page}&per_page=${dbPerPage}`;
         if (dbFilterInst) url += `&instrument=${encodeURIComponent(dbFilterInst)}`;
@@ -306,7 +322,7 @@ async function loadDatabase(page = 1) {
         renderBadges(data.total || allRecords.length);
         renderPagination();
     } catch {
-        $('dbTableBody').innerHTML = '<tr><td colspan="9" class="td-center" style="color:#e22134">Lỗi tải dữ liệu</td></tr>';
+        $('dbTableBody').innerHTML = '<tr><td colspan="10" class="td-center" style="color:#e22134">Lỗi tải dữ liệu</td></tr>';
     }
 }
 
@@ -351,11 +367,11 @@ function renderBadges(total) {
 
 function renderTable(records, startIdx = 0) {
     if (!records.length) {
-        $('dbTableBody').innerHTML = '<tr><td colspan="9" class="td-center">Chưa có dữ liệu trong CSDL</td></tr>';
+        $('dbTableBody').innerHTML = '<tr><td colspan="10" class="td-center">Chưa có dữ liệu trong CSDL</td></tr>';
         return;
     }
     $('dbTableBody').innerHTML = records.map((r, i) => `
-    <tr>
+    <tr class="db-row" data-id="${r._id || ''}">
       <td style="color:var(--muted)">${startIdx + i + 1}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.filename}">${r.filename || '–'}</td>
       <td><strong style="color:var(--green)">${r.instrument || '–'}</strong></td>
@@ -365,8 +381,20 @@ function renderTable(records, startIdx = 0) {
       <td>${fmt(r.zcr, 5)}</td>
       <td>${fmt(r.rms, 5)}</td>
       <td style="color:var(--muted);font-size:.75rem">${r.created_at ? new Date(r.created_at).toLocaleDateString('vi-VN') : '–'}</td>
+      <td>
+        <button class="sp-btn sp-btn--ghost sp-btn--sm db-view-btn" style="padding: 3px 8px; font-size: 0.75rem;">📄 Chi tiết</button>
+      </td>
     </tr>
   `).join('');
+
+    // Bind event listeners to details buttons
+    document.querySelectorAll('.db-view-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const row = btn.closest('.db-row');
+            const recordId = row.dataset.id;
+            if (recordId) openDetailDrawer(recordId);
+        });
+    });
 }
 
 $('dbFilter').addEventListener('input', function () {
@@ -377,34 +405,204 @@ $('dbFilter').addEventListener('input', function () {
 $('refreshDbBtn').addEventListener('click', () => loadDatabase(1));
 
 // ════════════════════════════════════════
-//  TAB 4 – EVALUATE
+//  TAB 4 – EVALUATE & EXPLAINABLE SEARCH
 // ════════════════════════════════════════
-$('evalBtn').addEventListener('click', async () => {
-    showOverlay('📊 Đang tính Precision...');
-    try {
-        const d = await fetch(`${API}/api/evaluate`, { method: 'POST' }).then(r => r.json());
-        hideOverlay();
-        if (d.error) { alert(`❌ ${d.error}`); return; }
+let lastSearchResult = null;
 
-        $('evalResults').classList.remove('hidden');
-        $('evalScore').textContent = `${d.overall_precision_at_5}%`;
+function renderEvaluation() {
+    const emptyState = $('eval-empty-state');
+    const contentState = $('eval-content-state');
 
-        $('evalBreakdown').innerHTML = Object.entries(d.per_instrument || {})
-            .sort((a, b) => b[1] - a[1])
-            .map(([inst, score]) => `
-        <div class="eval-card">
-          <div class="eval-card-inst">${inst}</div>
-          <div class="eval-card-score ${scoreColorClass(score)}">${score}%</div>
-        </div>`)
-            .join('');
-
-        // Render confusion matrix
-        renderConfusionMatrix(d.confusion_matrix || {});
-    } catch (e) {
-        hideOverlay();
-        alert(`❌ Lỗi: ${e.message}`);
+    if (!lastSearchResult) {
+        emptyState.classList.remove('hidden');
+        contentState.classList.add('hidden');
+        return;
     }
-});
+
+    emptyState.classList.add('hidden');
+    contentState.classList.remove('hidden');
+
+    const q = lastSearchResult.query;
+    const results = lastSearchResult.results;
+
+    // ── 1. Vẽ bảng so sánh đặc trưng ──
+    const compareTable = $('evalCompareTable');
+    let tableHtml = `
+        <thead>
+            <tr>
+                <th>Thuộc tính vật lý</th>
+                <th style="background: rgba(29, 185, 84, 0.05)">Query (${q.filename})</th>
+    `;
+    results.forEach(r => {
+        tableHtml += `<th>Top ${r.rank} (${r.instrument})</th>`;
+    });
+    tableHtml += `
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Nhạc cụ (Gán nhãn)</strong></td>
+                <td style="color:var(--green)">${lastSearchResult.prediction || 'unknown'} (Dự đoán)</td>
+    `;
+    results.forEach(r => {
+        tableHtml += `<td><strong style="color:var(--green)">${r.instrument}</strong></td>`;
+    });
+    tableHtml += `</tr><tr>
+                <td><strong>Họ nhạc cụ</strong></td>
+                <td>${(q.pitch_range === 'low' ? 'Bowed String' : 'String')}</td>
+    `;
+    results.forEach(r => {
+        tableHtml += `<td>${(r.instrument_family || '–').replaceAll('_', ' ')}</td>`;
+    });
+    tableHtml += `</tr><tr>
+                <td><strong>Nốt nhạc</strong></td>
+                <td>${q.dominant_note || 'unknown'}</td>
+    `;
+    results.forEach(r => {
+        tableHtml += `<td>${r.labeled_note || 'unknown'}</td>`;
+    });
+    tableHtml += `</tr><tr>
+                <td><strong>Thời lượng</strong></td>
+                <td>${fmt(q.duration)} s</td>
+    `;
+    results.forEach(r => {
+        tableHtml += `<td>${fmt(r.duration)} s</td>`;
+    });
+    tableHtml += `</tr><tr>
+                <td><strong>Spectral Centroid (Đo độ sáng)</strong></td>
+                <td>${fmt(q.spectral_centroid, 0)} Hz</td>
+    `;
+    results.forEach(r => {
+        const pctDiff = q.spectral_centroid ? Math.abs(r.spectral_centroid - q.spectral_centroid) / q.spectral_centroid * 100 : 0;
+        tableHtml += `<td>${fmt(r.spectral_centroid, 0)} Hz <br><small style="color:var(--muted)">(${fmt(pctDiff, 1)}% lệch)</small></td>`;
+    });
+    tableHtml += `</tr><tr>
+                <td><strong>ZCR (Tỉ lệ qua điểm 0)</strong></td>
+                <td>${fmt(q.zcr, 5)}</td>
+    `;
+    results.forEach(r => {
+        tableHtml += `<td>${fmt(r.zcr, 5)}</td>`;
+    });
+    tableHtml += `</tr><tr>
+                <td><strong>RMS Energy (Cường độ)</strong></td>
+                <td>${fmt(q.rms, 5)}</td>
+    `;
+    results.forEach(r => {
+        tableHtml += `<td>${fmt(r.rms, 5)}</td>`;
+    });
+    tableHtml += `</tr><tr>
+                <td><strong>Onset Strength (Attack)</strong></td>
+                <td>${fmt(q.onset_strength, 4)}</td>
+    `;
+    results.forEach(r => {
+        tableHtml += `<td>${fmt(r.onset_strength, 4)}</td>`;
+    });
+    tableHtml += `</tr><tr>
+                <td><strong>Độ tương đồng toàn cục</strong></td>
+                <td style="background: rgba(29, 185, 84, 0.05)">-</td>
+    `;
+    results.forEach(r => {
+        tableHtml += `<td style="color:var(--green);font-size:1.1rem;font-weight:800">${r.similarity}%</td>`;
+    });
+    tableHtml += `
+        </tbody>
+    `;
+    compareTable.innerHTML = tableHtml;
+
+    // ── 2. Cập nhật Dropdown chọn kết quả phân tích vector ──
+    const selector = $('evalSelectResult');
+    selector.innerHTML = results.map((r, i) => `
+        <option value="${i}">Top ${r.rank}: ${r.filename.slice(0, 30)}... (${r.similarity}%)</option>
+    `).join('');
+
+    // Bật listener change
+    selector.onchange = () => {
+        renderDetailAnalysis(Number(selector.value));
+    };
+
+    // Vẽ phân tích chi tiết của kết quả đầu tiên (Top 1) mặc định
+    renderDetailAnalysis(0);
+}
+
+function renderDetailAnalysis(idx) {
+    const data = lastSearchResult;
+    const q = data.query;
+    const r = data.results[idx];
+
+    const q_vec = q.feature_vector || [];
+    const r_vec = r.feature_vector || [];
+
+    if (!q_vec.length || !r_vec.length) {
+        $('evalContributionBars').innerHTML = '<p style="color:var(--muted)">Không có dữ liệu vector để phân tích.</p>';
+        return;
+    }
+
+    // Tích vô hướng từng chiều: P_i = Q_i * R_i
+    const prods = q_vec.map((qv, i) => qv * (r_vec[i] || 0));
+
+    // Tính toán theo các nhóm chiều đặc trưng đã định nghĩa ở extractor.py
+    // - MFCC Mean: 0 -> 39
+    // - MFCC Std: 40 -> 79
+    // - Chroma: 80 -> 91
+    // - Spectral: 92 -> 95 (Centroid 2d + Rolloff 1d + Flux 1d)
+    // - Dynamics: 96 -> 99 (ZCR 1d + RMS 1d + HNR 1d + Onset 1d)
+    
+    let mfccContrib = 0;
+    for (let i = 0; i < 80; i++) mfccContrib += prods[i] || 0;
+
+    let chromaContrib = 0;
+    for (let i = 80; i < 92; i++) chromaContrib += prods[i] || 0;
+
+    let spectralContrib = 0;
+    for (let i = 92; i < 96; i++) spectralContrib += prods[i] || 0;
+
+    let dynamicsContrib = 0;
+    for (let i = 96; i < 100; i++) dynamicsContrib += prods[i] || 0;
+
+    // Chuẩn hóa điểm đóng góp (tránh điểm âm làm hỏng phần trăm trực quan)
+    const mfccScore = Math.max(0, mfccContrib);
+    const chromaScore = Math.max(0, chromaContrib);
+    const spectralScore = Math.max(0, spectralContrib);
+    const dynamicsScore = Math.max(0, dynamicsContrib);
+    const sumScore = mfccScore + chromaScore + spectralScore + dynamicsScore || 1;
+
+    const mfccPct = (mfccScore / sumScore) * 100;
+    const chromaPct = (chromaScore / sumScore) * 100;
+    const spectralPct = (spectralScore / sumScore) * 100;
+    const dynamicsPct = (dynamicsScore / sumScore) * 100;
+
+    // Render thanh tiến trình đóng góp
+    $('evalContributionBars').innerHTML = `
+        <div class="contribution-bar">
+            <div class="c-bar-info">
+                <span class="c-bar-label">🎸 Âm sắc & Nhận diện (MFCC Mean/Std - 80d)</span>
+                <span class="c-bar-val">${fmt(mfccPct, 1)}% (${fmt(mfccContrib, 3)})</span>
+            </div>
+            <div class="c-bar-track"><div class="c-bar-fill mfcc" style="width: ${mfccPct}%"></div></div>
+        </div>
+        <div class="contribution-bar">
+            <div class="c-bar-info">
+                <span class="c-bar-label">🎹 Hài âm & Tần số cơ bản (Chroma - 12d)</span>
+                <span class="c-bar-val">${fmt(chromaPct, 1)}% (${fmt(chromaContrib, 3)})</span>
+            </div>
+            <div class="c-bar-track"><div class="c-bar-fill chroma" style="width: ${chromaPct}%"></div></div>
+        </div>
+        <div class="contribution-bar">
+            <div class="c-bar-info">
+                <span class="c-bar-label">🔆 Tần số phổ & Độ sáng (Centroid, Rolloff, Flux - 4d)</span>
+                <span class="c-bar-val">${fmt(spectralPct, 1)}% (${fmt(spectralContrib, 3)})</span>
+            </div>
+            <div class="c-bar-track"><div class="c-bar-fill spectral" style="width: ${spectralPct}%"></div></div>
+        </div>
+        <div class="contribution-bar">
+            <div class="c-bar-info">
+                <span class="c-bar-label">⏱ Động lực học & Thời gian (ZCR, RMS, HNR, Onset - 4d)</span>
+                <span class="c-bar-val">${fmt(dynamicsPct, 1)}% (${fmt(dynamicsContrib, 3)})</span>
+            </div>
+            <div class="c-bar-track"><div class="c-bar-fill dynamics" style="width: ${dynamicsPct}%"></div></div>
+        </div>
+    `;
+}
 
 // ════════════════════════════════════════
 //  INTERMEDIATE RESULTS
@@ -465,39 +663,189 @@ function renderIntermediate(q) {
 }
 
 // ════════════════════════════════════════
-//  CONFUSION MATRIX RENDERER
-// ════════════════════════════════════════
-function renderConfusionMatrix(cm) {
-    const container = $('confusionMatrix');
-    if (!cm || !Object.keys(cm).length) {
-        container.innerHTML = '<p style="color:var(--muted)">Chưa có dữ liệu confusion matrix.</p>';
-        return;
-    }
-    const instruments = [...new Set([
-        ...Object.keys(cm),
-        ...Object.values(cm).flatMap(row => Object.keys(row))
-    ])].sort();
-
-    let html = '<table class="cf-table"><thead><tr><th>Actual \\ Pred</th>';
-    instruments.forEach(c => { html += `<th>${c}</th>`; });
-    html += '</tr></thead><tbody>';
-
-    instruments.forEach(actual => {
-        html += `<tr><th>${actual}</th>`;
-        const rowMax = Math.max(...instruments.map(p => (cm[actual] || {})[p] || 0), 1);
-        instruments.forEach(pred => {
-            const count = (cm[actual] || {})[pred] || 0;
-            const heat = Math.round((count / rowMax) * 100);
-            const isDiag = actual === pred;
-            html += `<td style="background:rgba(${isDiag ? '100,200,100' : '200,80,80'},${heat / 100 * 0.7});color:${count ? '#fff' : 'var(--muted)'};">${count || '–'}</td>`;
-        });
-        html += '</tr>';
-    });
-    html += '</tbody></table>';
-    container.innerHTML = html;
-}
-
-// ════════════════════════════════════════
 //  BOOT
 // ════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', initApp);
+document.addEventListener('DOMContentLoaded', () => {
+    initApp();
+});
+
+// ════════════════════════════════════════
+//  DETAIL DRAWER
+// ════════════════════════════════════════
+const drawer   = $('detailDrawer');
+const backdrop = $('detailBackdrop');
+let currentDrawerRecordId = null;
+
+function openDetailDrawer(recordId, ctx = {}) {
+    currentDrawerRecordId = recordId;
+
+    // Pause any playing card audio to avoid overlapping sound
+    document.querySelectorAll('.rc-audio').forEach(a => {
+        a.pause();
+        const card = a.closest('.result-card');
+        if (card) {
+            const playBtn = card.querySelector('.rc-play');
+            if (playBtn) playBtn.textContent = '▶';
+        }
+    });
+
+    // Show drawer immediately with loading state
+    $('ddFname').textContent = 'Đang tải...';
+    $('ddInst').textContent  = '';
+    $('ddIcon').className    = 'dd-icon';
+    $('ddIcon').textContent  = '♪';
+    $('ddTable').innerHTML   = '<tr><td colspan="2" style="color:var(--muted);padding:24px 0;text-align:center">⏳ Đang tải dữ liệu...</td></tr>';
+    $('ddVecWrap').innerHTML = '';
+    $('ddAudio').src = '';
+
+    // Similarity row
+    const simRow = $('ddSimRow');
+    if (ctx.similarity != null) {
+        simRow.classList.remove('hidden');
+        $('ddSimVal').textContent = `${ctx.similarity}%`;
+        setTimeout(() => { $('ddSimFill').style.width = `${ctx.similarity}%`; }, 50);
+    } else {
+        simRow.classList.add('hidden');
+        $('ddSimFill').style.width = '0%';
+    }
+
+    backdrop.classList.remove('hidden');
+    drawer.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    if (!recordId) { return; }
+
+    // Fetch full record
+    fetch(`${API}/api/records/${recordId}`)
+        .then(r => r.json())
+        .then(doc => renderDrawer(doc, ctx))
+        .catch(() => {
+            $('ddTable').innerHTML = '<tr><td colspan="2" style="color:#e22134;padding:16px 0">Không tải được dữ liệu</td></tr>';
+        });
+}
+
+function closeDetailDrawer() {
+    drawer.classList.remove('open');
+    backdrop.classList.add('hidden');
+    document.body.style.overflow = '';
+    // Stop audio
+    const audio = $('ddAudio');
+    audio.pause();
+    audio.src = '';
+    currentDrawerRecordId = null;
+}
+
+$('ddClose').addEventListener('click', closeDetailDrawer);
+backdrop.addEventListener('click', closeDetailDrawer);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetailDrawer(); });
+
+function renderDrawer(doc, ctx) {
+    // ── Header ──────────────────────────────────────────────
+    const fam   = doc.instrument_family || 'unknown';
+    const icon  = instIcon(doc.instrument || '');
+    $('ddFname').textContent = doc.filename || '–';
+    $('ddInst').textContent  = `${doc.instrument || '–'} · ${(fam).replaceAll('_', ' ')}`;
+    $('ddIcon').textContent  = icon;
+    $('ddIcon').className    = `dd-icon ${fam === 'plucked_string' ? 'plucked' : ''}`;
+
+    // ── Audio ────────────────────────────────────────────────
+    if (doc._id) {
+        $('ddAudio').src = `${API}/api/audio/${doc._id}`;
+    }
+
+    // ── MFCC Chart ───────────────────────────────────────────
+    const mfcc = doc.mfcc_mean || [];
+    if (mfcc.length) {
+        const canvas = $('ddMfccChart');
+        const ctx2   = canvas.getContext('2d');
+        const W = canvas.offsetWidth || 360;
+        const H = 90;
+        canvas.width  = W;
+        canvas.height = H;
+        const barW  = Math.max(1, Math.floor(W / mfcc.length));
+        const maxV  = Math.max(...mfcc.map(Math.abs), 1);
+        const midY  = H / 2;
+
+        ctx2.clearRect(0, 0, W, H);
+        ctx2.fillStyle = '#0d1b2e';
+        ctx2.fillRect(0, 0, W, H);
+
+        ctx2.strokeStyle = '#2a3a4a';
+        ctx2.lineWidth = 1;
+        ctx2.beginPath(); ctx2.moveTo(0, midY); ctx2.lineTo(W, midY); ctx2.stroke();
+
+        mfcc.forEach((v, i) => {
+            const barH = (Math.abs(v) / maxV) * (midY - 4);
+            const x    = i * barW + 1;
+            const isPos = v >= 0;
+            const grad  = ctx2.createLinearGradient(0, isPos ? midY - barH : midY, 0, isPos ? midY : midY + barH);
+            grad.addColorStop(0, isPos ? '#7e57c2' : '#ef5350');
+            grad.addColorStop(1, isPos ? '#4a2080' : '#8b2020');
+            ctx2.fillStyle = grad;
+            ctx2.fillRect(x, isPos ? midY - barH : midY, barW - 2, barH);
+        });
+    }
+
+    // ── Feature Table ────────────────────────────────────────
+    const rows = [
+        ['Tên file',            doc.filename || '–'],
+        ['Nhạc cụ',             `<span class="dd-tag">${doc.instrument || '–'}</span>`],
+        ['Họ nhạc cụ',          (fam).replaceAll('_', ' ')],
+        ['Nốt gán nhãn',        doc.labeled_note || 'unknown'],
+        ['Nốt ước lượng (F0)',  doc.dominant_note || 'unknown'],
+        ['Dominant F0',         doc.dominant_f0_hz != null ? `${fmt(doc.dominant_f0_hz, 2)} Hz` : '–'],
+        ['Âm vực',              doc.pitch_range || 'unknown'],
+        ['Duration',            doc.duration != null ? `${fmt(doc.duration)} s` : '–'],
+        ['Sample Rate',         doc.sample_rate != null ? `${doc.sample_rate} Hz` : '–'],
+        ['Spectral Centroid',   doc.spectral_centroid != null ? `${fmt(doc.spectral_centroid, 1)} Hz` : '–'],
+        ['ZCR',                 doc.zcr != null ? fmt(doc.zcr, 5) : '–'],
+        ['RMS Energy',          doc.rms != null ? fmt(doc.rms, 5) : '–'],
+        ['Onset Strength',      doc.onset_strength != null ? fmt(doc.onset_strength, 4) : '–'],
+        ['Feature Dim',         (doc.feature_vector || []).length ? `${doc.feature_vector.length}D` : '–'],
+        ['Ngày thêm',           doc.created_at ? new Date(doc.created_at).toLocaleString('vi-VN') : '–'],
+        ['FAISS index',         doc.faiss_index != null ? doc.faiss_index : '–'],
+    ];
+
+    $('ddTable').innerHTML = rows.map(([k, v]) =>
+        `<tr><td>${k}</td><td>${v}</td></tr>`
+    ).join('');
+
+    // ── Feature Vector chips ─────────────────────────────────
+    const vec    = doc.feature_vector || [];
+    const SHOW   = 30;
+    const chips  = vec.slice(0, SHOW).map((v, i) =>
+        `<span class="dd-vec-chip" title="dim ${i}">${Number(v).toFixed(3)}</span>`
+    ).join('');
+    const more   = vec.length > SHOW
+        ? `<span class="dd-vec-more">+${vec.length - SHOW} more</span>`
+        : '';
+    $('ddVecWrap').innerHTML = chips + more;
+}
+
+// ── Bind Delete button inside Detail Drawer ──
+$('ddDeleteBtn').addEventListener('click', async () => {
+    if (!currentDrawerRecordId) return;
+    const ok = confirm("Bạn có chắc chắn muốn xóa bản ghi này khỏi cơ sở dữ liệu và đĩa cứng không?");
+    if (!ok) return;
+
+    showOverlay('🗑 Đang xóa bản ghi...');
+    try {
+        const res = await fetch(`${API}/api/records/${currentDrawerRecordId}`, { method: 'DELETE' }).then(r => r.json());
+        hideOverlay();
+        if (res.deleted) {
+            closeDetailDrawer();
+            // Refresh database view if active
+            if ($('tab-database').classList.contains('active')) {
+                loadDatabase(dbCurrentPage);
+            }
+            loadStats();
+            alert("✓ Đã xóa bản ghi thành công.");
+        } else {
+            alert(`✗ Không thể xóa: ${res.error}`);
+        }
+    } catch (e) {
+        hideOverlay();
+        alert(`✗ Lỗi khi xóa: ${e.message}`);
+    }
+});
+

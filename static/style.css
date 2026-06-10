@@ -357,33 +357,50 @@ body {
 }
 
 .uz-ready {
-    padding: 1.5rem 2rem;
+    padding: 2rem;
     width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .uz-file-info {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 16px;
-    margin-bottom: 20px;
+    gap: 12px;
+    margin-bottom: 24px;
+    width: 100%;
+    text-align: center;
+}
+
+.uz-file-info > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
 }
 
 .uz-file-icon {
-    font-size: 2.5rem;
+    font-size: 3rem;
+    margin-bottom: 4px;
 }
 
 .uz-fname {
     font-weight: 700;
-    font-size: 0.95rem;
-    margin-bottom: 8px;
+    font-size: 1.05rem;
+    margin-bottom: 12px;
     word-break: break-all;
+    color: var(--white);
 }
 
 .uz-actions {
     display: flex;
     align-items: center;
-    gap: 16px;
+    justify-content: center;
+    gap: 20px;
     flex-wrap: wrap;
+    width: 100%;
 }
 
 .k-control {
@@ -407,6 +424,7 @@ body {
 .sp-player-mini {
     width: 100%;
     max-width: 360px;
+    min-width: 280px;
     height: 32px;
     border-radius: 20px;
     accent-color: var(--green);
@@ -889,75 +907,218 @@ body {
 /* ══════════════════════════════════════
    EVALUATE
 ══════════════════════════════════════ */
-.eval-cards {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 28px;
-}
-
-@media (max-width: 600px) {
-    .eval-cards {
-        grid-template-columns: 1fr;
-    }
-}
-
-.eval-info-card {
+/* ══════════════════════════════════════
+   EVALUATE & EXPLAINABLE SEARCH
+══════════════════════════════════════ */
+.empty-state-eval {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 300px;
     background: var(--bg2);
     border-radius: var(--radius-lg);
-    padding: 20px;
+    padding: 40px;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.eval-info-card h3 {
-    font-size: 0.95rem;
+.eval-empty-card h3 {
+    font-size: 1.25rem;
     font-weight: 700;
-    margin-bottom: 8px;
-    color: var(--green);
+    margin: 16px 0 8px;
 }
 
-.eval-info-card p {
-    font-size: 0.83rem;
+.eval-empty-card p {
+    color: var(--muted);
+    font-size: 0.88rem;
+    margin-bottom: 24px;
+    max-width: 400px;
+    line-height: 1.6;
+}
+
+.eval-empty-icon {
+    font-size: 3rem;
+    animation: pulse 2s infinite;
+}
+
+.eval-theory-card {
+    background: var(--bg2);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 32px;
+    border-left: 4px solid var(--green);
+}
+
+.eval-theory-card h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: var(--white);
+}
+
+.eval-theory-card p {
+    font-size: 0.82rem;
     color: var(--muted);
     line-height: 1.6;
 }
 
-.eval-overall {
-    text-align: center;
-    padding: 40px 0;
-}
-
-.eval-label {
-    font-size: 0.85rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 8px;
-}
-
-.eval-score {
-    font-size: 4rem;
-    font-weight: 800;
+.formula-block {
+    background: #090909;
+    border-radius: var(--radius);
+    padding: 16px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.95rem;
+    font-weight: 700;
     color: var(--green);
-    line-height: 1;
+    text-align: center;
+    margin: 16px 0;
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.eval-card {
+.formula-desc {
+    font-size: 0.78rem !important;
+    font-style: italic;
+}
+
+.eval-section {
+    margin-bottom: 32px;
+}
+
+.eval-section-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: 16px;
+}
+
+.eval-flex-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.eval-select-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.82rem;
+    color: var(--muted);
+}
+
+.eval-select {
+    background: var(--bg3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--white);
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    transition: var(--trans);
+}
+
+.eval-select:hover {
+    border-color: var(--white);
+}
+
+.eval-analysis-layout {
+    display: block;
+}
+
+.eval-analysis-card {
     background: var(--bg2);
     border-radius: var(--radius-lg);
-    padding: 20px 16px;
-    text-align: center;
+    padding: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.03);
 }
 
-.eval-card-inst {
-    font-size: 0.78rem;
+.eval-analysis-card h4 {
+    font-size: 0.88rem;
+    font-weight: 700;
     color: var(--muted);
-    margin-bottom: 8px;
-    text-transform: capitalize;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 10px;
 }
 
-.eval-card-score {
-    font-size: 1.6rem;
-    font-weight: 800;
+/* Contribution bars */
+.contribution-bars-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.contribution-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.c-bar-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.c-bar-label {
+    color: var(--white);
+}
+
+.c-bar-val {
+    color: var(--muted);
+}
+
+.c-bar-track {
+    height: 8px;
+    background: var(--bg3);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.c-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dynamic colors for bars */
+.c-bar-fill.mfcc { background: linear-gradient(90deg, #7e57c2, #b39ddb); }
+.c-bar-fill.chroma { background: linear-gradient(90deg, #26a69a, #80cbc4); }
+.c-bar-fill.spectral { background: linear-gradient(90deg, #ab47bc, #e1bee7); }
+.c-bar-fill.dynamics { background: linear-gradient(90deg, #ffa726, #ffe082); }
+
+/* Explainer text styles */
+.eval-explainer-text {
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.7;
+}
+
+.eval-explainer-text p {
+    margin-bottom: 12px;
+}
+
+.eval-explainer-text strong {
+    color: var(--white);
+}
+
+.eval-explainer-bullet {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.eval-explainer-bullet::before {
+    content: "•";
+    color: var(--green);
+    font-weight: bold;
 }
 
 .score-high {

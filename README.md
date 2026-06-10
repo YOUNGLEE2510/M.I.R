@@ -58,7 +58,7 @@ Mở trình duyệt: **http://localhost:5000**
 | POST | `/api/search` | Tìm kiếm Top-K |
 | POST | `/api/index/build` | Rebuild FAISS index |
 | GET  | `/api/audio/<id>` | Stream file âm thanh |
-| POST | `/api/evaluate` | Đánh giá Precision |
+| POST | `/api/fix-paths` | Batch fix đường dẫn file |
 
 ---
 
@@ -67,14 +67,16 @@ Mở trình duyệt: **http://localhost:5000**
 ├── app.py                  # Flask main app
 ├── config.py               # Cấu hình
 ├── evaluate.py             # CLI evaluation
+├── optimize.py             # Tối ưu trọng số (Simulated Annealing)
+├── utils.py                # Tiện ích
 ├── requirements.txt
-├── .env                    # MongoDB URI
+├── .env                    # MongoDB URI + FLASK_DEBUG
 ├── data/Strings_wav/       # Thư mục chứa audio (mặc định)
 ├── database/
 │   └── mongo_client.py     # MongoDB CRUD
 ├── features/
 │   ├── extractor.py        # AudioFeatureExtractor
-│   └── batch_extract.py    # Batch processing
+│   └── batch_extract.py    # Batch processing (2-pass)
 ├── search/
 │   ├── faiss_index.py      # FAISS index manager
 │   └── searcher.py         # AudioSearcher

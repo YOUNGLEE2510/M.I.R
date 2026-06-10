@@ -663,10 +663,96 @@ function renderIntermediate(q) {
 }
 
 // ════════════════════════════════════════
+<<<<<<< HEAD
+=======
+//  CONFUSION MATRIX RENDERER
+// ════════════════════════════════════════
+function renderConfusionMatrix(cm) {
+    const container = $('confusionMatrix');
+    if (!cm || !Object.keys(cm).length) {
+        container.innerHTML = '<p style="color:var(--muted)">Chưa có dữ liệu confusion matrix.</p>';
+        return;
+    }
+    const instruments = [...new Set([
+        ...Object.keys(cm),
+        ...Object.values(cm).flatMap(row => Object.keys(row))
+    ])].sort();
+
+    let html = '<table class="cf-table"><thead><tr><th>Actual \\ Pred</th>';
+    instruments.forEach(c => { html += `<th>${c}</th>`; });
+    html += '</tr></thead><tbody>';
+
+    instruments.forEach(actual => {
+        html += `<tr><th>${actual}</th>`;
+        const rowMax = Math.max(...instruments.map(p => (cm[actual] || {})[p] || 0), 1);
+        instruments.forEach(pred => {
+            const count = (cm[actual] || {})[pred] || 0;
+            const heat = Math.round((count / rowMax) * 100);
+            const isDiag = actual === pred;
+            html += `<td style="background:rgba(${isDiag ? '100,200,100' : '200,80,80'},${heat / 100 * 0.7});color:${count ? '#fff' : 'var(--muted)'};">${count || '–'}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// Click vào các thẻ nhạc cụ ở màn hình chính để chạy demo search tự động
+function setupDemoCards() {
+    document.querySelectorAll('.es-card').forEach(card => {
+        card.style.cursor = 'pointer';
+        card.title = 'Click để chạy thử tìm kiếm mẫu cho nhạc cụ này';
+        card.addEventListener('click', async () => {
+            const instName = card.querySelector('span').textContent.toLowerCase();
+            showOverlay(`Đang tải file mẫu ${instName}...`);
+            try {
+                // Lấy 1 record mẫu của nhạc cụ này từ DB
+                const data = await fetch(`${API}/api/records?instrument=${instName}&per_page=1`).then(r => r.json());
+                if (!data.records || !data.records.length) {
+                    hideOverlay();
+                    alert(`Không tìm thấy file mẫu cho ${instName} trong thư viện.`);
+                    return;
+                }
+                const rec = data.records[0];
+                // Tải file audio
+                const res = await fetch(`${API}/api/audio/${rec._id}`);
+                if (!res.ok) throw new Error("Không thể tải file audio mẫu.");
+                const blob = await res.blob();
+                const file = new File([blob], rec.filename, { type: 'audio/wav' });
+                
+                // Đưa vào search zone
+                searchFile = file;
+                $('searchFileName').textContent = file.name;
+                $('searchAudio').src = URL.createObjectURL(file);
+                $('uzIdle').classList.add('hidden');
+                $('uzReady').classList.remove('hidden');
+                $('searchEmpty').classList.add('hidden');
+                
+                // Kích hoạt tìm kiếm
+                showOverlay('🔍 Đang phân tích âm thanh...');
+                const form = new FormData();
+                form.append('file', searchFile);
+                form.append('k', $('kSlider').value);
+                const searchData = await fetch(`${API}/api/search`, { method: 'POST', body: form }).then(r => r.json());
+                hideOverlay();
+                if (searchData.error) { alert(`❌ ${searchData.error}`); return; }
+                lastSearchResult = searchData;
+                renderResults(searchData);
+            } catch (e) {
+                hideOverlay();
+                alert(`❌ Lỗi tải demo: ${e.message}`);
+            }
+        });
+    });
+}
+
+// ════════════════════════════════════════
+>>>>>>> 5bfcbf5ee26f2fb5ad6e9969353262109e359c4f
 //  BOOT
 // ════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
+<<<<<<< HEAD
 });
 
 // ════════════════════════════════════════
@@ -847,5 +933,8 @@ $('ddDeleteBtn').addEventListener('click', async () => {
         hideOverlay();
         alert(`✗ Lỗi khi xóa: ${e.message}`);
     }
+=======
+    setupDemoCards();
+>>>>>>> 5bfcbf5ee26f2fb5ad6e9969353262109e359c4f
 });
 

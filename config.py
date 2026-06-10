@@ -53,7 +53,11 @@ MAX_UPLOAD_MB = 50   # Giới hạn upload file (MB)
 INSTRUMENT_FAMILIES = {
     "bowed_string":   ["violin", "viola", "cello", "contrabass", "double_bass",
                         "double bass", "erhu"],
+<<<<<<< HEAD
     "plucked_string": ["guitar", "bass_guitar", "ukulele", "mandolin",
+=======
+    "plucked_string": ["guitar", "bass_guitar", "ukulele", "mandolin", "harp",
+>>>>>>> 5bfcbf5ee26f2fb5ad6e9969353262109e359c4f
                         "banjo", "sitar", "dan_tranh", "dan_ty_ba", "dan_bau"],
 }
 

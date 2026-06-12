@@ -10,14 +10,12 @@ graph TD
     subgraph CLIENT["🖥️ Giao Diện Web (HTML5 / CSS3 / JS)"]
         UI_SEARCH["Trang Tìm Kiếm\n(Upload Query Audio)"]
         UI_LIB["Thư Viện Âm Thanh\n(Browse / Filter)"]
-        UI_EVAL["Đánh Giá Hệ Thống\n(Run Evaluate)"]
     end
 
     subgraph SERVER["⚙️ Backend – Flask REST API (app.py)"]
         API_SEARCH["POST /api/search"]
         API_INGEST["POST /api/ingest"]
         API_BUILD["POST /api/index/build"]
-        API_EVAL["POST /api/evaluate"]
         API_RECORDS["GET /api/records"]
         API_AUDIO["GET /api/audio/<id>"]
     end
@@ -42,7 +40,6 @@ graph TD
     UI_SEARCH -->|"Upload WAV/MP3"| API_SEARCH
     UI_LIB -->|"HTTP GET"| API_RECORDS
     UI_LIB -->|"Stream"| API_AUDIO
-    UI_EVAL -->|"Trigger"| API_EVAL
 
     API_SEARCH --> SEARCHER
     SEARCHER --> EXTRACTOR
@@ -91,7 +88,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    START(["data/Strings_wav/\n<nhac_cu>/<file.wav>"])
+    START(["data/\n<nhac_cu>/<file.wav>"])
 
     subgraph PASS1["Pass 1 – Thu thập Raw Vectors"]
         P1A["collect() – quét thư mục"]
@@ -211,7 +208,7 @@ Musical Instrument Recognition System/
 │   └── feature_stats.json   # Z-score mean/std (learned)
 │
 ├── data/
-│   └── Strings_wav/
+│ 
 │       ├── violin/          # 1502 files
 │       ├── viola/           # 973 files
 │       ├── cello/           # 889 files

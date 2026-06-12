@@ -1,4 +1,6 @@
 import sys, os
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import uuid, traceback, glob
@@ -86,6 +88,11 @@ def searcher() -> AudioSearcher:
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return "", 204
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -264,9 +271,9 @@ def search():
     except (TypeError, ValueError):
         k = 5
     path = tmp_path(f.filename)
-    f.save(path)
 
     try:
+        f.save(path)
         result = searcher().search(path, k=k)
         return jsonify(result)
     except RuntimeError as e:

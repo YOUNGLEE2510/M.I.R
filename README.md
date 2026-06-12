@@ -22,7 +22,7 @@ pip install -r requirements.txt
 ### Bước 1 – Chuẩn bị dữ liệu
 Đặt file âm thanh vào thư mục tương ứng (mặc định):
 ```
-data/Strings_wav/
+data/
   violin/    ← violin_01.wav, violin_02.wav ...
   guitar/    ← guitar_01.wav ...
   cello/     ← cello_01.wav ...
@@ -71,7 +71,7 @@ Mở trình duyệt: **http://localhost:5000**
 ├── utils.py                # Tiện ích
 ├── requirements.txt
 ├── .env                    # MongoDB URI + FLASK_DEBUG
-├── data/Strings_wav/       # Thư mục chứa audio (mặc định)
+├── data/       # Thư mục chứa audio (mặc định)
 ├── database/
 │   └── mongo_client.py     # MongoDB CRUD
 ├── features/

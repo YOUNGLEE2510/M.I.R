@@ -52,7 +52,7 @@ def run(rebuild_index: bool = True):
     files = collect(DATASET_PATH)
     if not files:
         print(f"\n[WARN] Không tìm thấy file âm thanh trong: {DATASET_PATH}")
-        print("  Hãy thêm file âm thanh vào data/Strings_wav/<nhac_cu>/")
+        print("  Hãy thêm file âm thanh vào data/<nhac_cu>/")
         return
 
     # Statistics
@@ -108,11 +108,17 @@ def run(rebuild_index: bool = True):
         return
 
     # ── Refit scaler từ raw vectors thực ────────────────────
-    print(f"\n[Scaler] Fitting Z-score stats từ {len(pass1_raw_vecs)} raw vectors...")
-    AudioFeatureExtractor.refit_scaler(pass1_raw_vecs)
-    # Invalidate cache → scale_features() sẽ load stats mới từ file
-    AudioFeatureExtractor._scaler_mean = None
-    AudioFeatureExtractor._scaler_std  = None
+    # Chỉ refit scaler nếu chưa có file stats lưu trên đĩa (cold start),
+    # HOẶC chúng ta đang xử lý lượng lớn file mới (> số file cũ) để tránh trôi lệch phân bố (distribution drift).
+    stats_exists = os.path.exists(AudioFeatureExtractor._STATS_PATH)
+    if not stats_exists or len(new_files) > len(existing):
+        print(f"\n[Scaler] Fitting Z-score stats từ {len(pass1_raw_vecs)} raw vectors...")
+        AudioFeatureExtractor.refit_scaler(pass1_raw_vecs)
+        # Invalidate cache → scale_features() sẽ load stats mới từ file
+        AudioFeatureExtractor._scaler_mean = None
+        AudioFeatureExtractor._scaler_std  = None
+    else:
+        print(f"\n[Scaler] Giữ nguyên Z-score stats hiện tại (sử dụng stats từ {AudioFeatureExtractor._STATS_PATH}) để tránh trôi lệch phân bố.")
 
     # ══════════════════════════════════════════════════════════
     # PASS 2 – Áp dụng scaler đúng rồi lưu vào MongoDB

@@ -56,6 +56,7 @@ class AudioSearcher:
                 "instrument_family": doc.get("instrument_family", "unknown"),
                 "labeled_note":      labeled_note,
                 "duration":          doc.get("duration", 0),
+                "dominant_f0_hz":    doc.get("dominant_f0_hz", 0.0),
                 "spectral_centroid": doc.get("spectral_centroid", 0),
                 "zcr":               doc.get("zcr", 0),
                 "rms":               doc.get("rms", 0),

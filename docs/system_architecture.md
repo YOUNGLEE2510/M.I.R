@@ -2,6 +2,11 @@
 
 Tài liệu này thuyết minh chi tiết cấu trúc hệ thống, quy trình trích xuất đặc trưng âm thanh, sơ đồ khối và cơ chế tìm kiếm vector phục vụ cho mục đích trình bày và bảo vệ bài tập lớn.
 
+> [!NOTE]
+> **Phạm vi hệ thống**: Hệ thống được thiết kế và tối ưu chuyên biệt cho **07 loại nhạc cụ bộ dây** cốt lõi có trong cơ sở dữ liệu thực tế và báo cáo lý thuyết của Nhóm 10:
+> - **Họ dây kéo (Bowed Strings):** Violin, Viola, Cello, Double Bass.
+> - **Họ dây gảy (Plucked Strings):** Guitar, Mandolin, Banjo.
+
 ---
 
 ## 1. Sơ đồ khối & Quy trình xử lý (Yêu cầu 4.a)
